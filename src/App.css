@@ -110,19 +110,51 @@
    LOGIN PAGE
    ============================================================ */
 .login-page {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: var(--bg);
   display: flex; flex-direction: column; align-items: center;
-  justify-content: center; min-height: 100vh; padding: 32px; text-align: center;
+  justify-content: center; 
+  overflow: hidden;
+  padding: 20px; text-align: center;
+  box-sizing: border-box;
 }
-.login-hero { max-width: 520px; margin-bottom: 40px; }
+.login-hero { position: relative; max-width: 520px; margin-bottom: 24px; z-index: 1; }
+@keyframes justFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+@keyframes justGlow {
+  0%, 100% { box-shadow: 0 0 30px rgba(245,158,11,0.15), inset 0 0 10px rgba(245,158,11,0); }
+  50% { box-shadow: 0 0 50px rgba(245,158,11,0.35), inset 0 0 20px rgba(245,158,11,0.1); }
+}
+
+.floating-logo-assembly {
+  animation: justFloat 4s ease-in-out infinite;
+  cursor: pointer;
+}
+
 .login-logo-wrap {
   display: inline-flex; align-items: center; justify-content: center;
   width: 64px; height: 64px; border-radius: 18px;
   background: rgba(245,158,11,0.1);
   border: 1px solid rgba(245,158,11,0.3);
-  margin-bottom: 28px;
-  box-shadow: 0 0 40px rgba(245,158,11,0.15);
-  animation: fadeUp 0.4s cubic-bezier(0.16,1,0.3,1) both;
+  animation: justGlow 4s ease-in-out infinite;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
+
+.login-logo-hover-zone:hover {
+  animation-play-state: paused; /* Pause float on hover */
+}
+.login-logo-hover-zone:hover .login-logo-wrap {
+  border-color: rgba(245,158,11,0.6);
+  background: rgba(245,158,11,0.2);
+  box-shadow: 0 0 80px rgba(245,158,11,0.6), inset 0 0 30px rgba(245,158,11,0.3);
+  transform: scale(1.05);
+  animation-play-state: paused;
+}
+
 .login-title {
   font-family: 'Space Grotesk', sans-serif;
   font-size: clamp(2.5rem, 6vw, 4rem);
@@ -146,16 +178,49 @@
   transition: all 0.2s ease;
 }
 .btn-google:hover { background: rgba(255,252,245,0.08); transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+/* Card Emitter Animation */
+.features-emitter {
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 0; height: 0;
+  z-index: 1; 
+  pointer-events: none;
+}
+.emitted-card {
+  position: absolute;
+  background: rgba(255, 252, 245, 0.02);
+  border: 1px solid rgba(255, 252, 245, 0.08);
+  padding: 4px 8px;
+  border-radius: 8px;
+  display: flex; align-items: center; gap: 6px;
+  white-space: nowrap;
+  text-align: left;
+  opacity: 0;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  /* Base state: Hidden and shrunk behind the logo */
+  transform: scale(0.5);
+  pointer-events: none;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
 
-.login-features {
-  display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 40px;
-  animation: fadeUp 0.4s 0.2s cubic-bezier(0.16,1,0.3,1) both;
-}
-.feature-pill {
-  display: flex; align-items: center; gap: 6px; padding: 7px 14px;
-  background: var(--surface); border: 1px solid var(--border);
-  border-radius: var(--r-full); font-size: 0.8rem; color: var(--text-2);
-}
+.emitted-icon { font-size: 0.75rem; background: rgba(255,255,255,0.05); padding: 4px; border-radius: 6px; }
+.emitted-text { display: flex; flex-direction: column; gap: 0px; }
+.emitted-title { font-size: 0.55rem; font-weight: 600; color: var(--text-1); line-height: 1.1; }
+.emitted-desc { font-size: 0.45rem; color: var(--text-3); line-height: 1.1; }
+
+/* Anchor the cards exactly 32px from the center so their movement is 100% symmetrical regardless of text width */
+.card-tr { left: 32px; bottom: 32px; transform-origin: bottom left; }
+.card-br { left: 32px; top: 32px; transform-origin: top left; }
+.card-bl { right: 32px; top: 32px; transform-origin: top right; }
+.card-tl { right: 32px; bottom: 32px; transform-origin: bottom right; }
+
+/* Interactive Hover Trigger */
+.login-logo-hover-zone:hover .card-tr { opacity: 1; transform: scale(1) translate(15px, -15px); }
+.login-logo-hover-zone:hover .card-br { opacity: 1; transform: scale(1) translate(15px, 15px); }
+.login-logo-hover-zone:hover .card-bl { opacity: 1; transform: scale(1) translate(-15px, 15px); }
+.login-logo-hover-zone:hover .card-tl { opacity: 1; transform: scale(1) translate(-15px, -15px); }
 
 /* ============================================================
    DASHBOARD

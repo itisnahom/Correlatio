@@ -100,6 +100,8 @@ const LineTip = ({ active, payload, label }) => {
 const axisStyle = { fill: '#555047', fontSize: 11, fontFamily: 'Inter, sans-serif' };
 const gridStyle = { stroke: 'rgba(255,252,245,0.04)', strokeDasharray: '3 6' };
 const axisLine = { stroke: 'rgba(255,252,245,0.06)' };
+const boolTick = (v) => v === 1 ? 'Yes' : v === 0 ? 'No' : '';
+const isBoolType = (v) => v?.typeId === 'boolean' || v?.unit === 'bool';
 
 /* ---- Heatmap Component (built with CSS, no extra library) ---- */
 const HeatMap = ({ logs, allVars, varColors }) => {
@@ -193,8 +195,15 @@ const HeatMap = ({ logs, allVars, varColors }) => {
 const CorrelationGraph = ({ logs, chain, rValue, mode, allLogs, allVars, varColors }) => {
   const lineColor = rValue > 0.1 ? '#10b981' : rValue < -0.1 ? '#f43f5e' : '#a09b8c';
 
-  /* ---- Scatter data + trend line ---- */
-  const scatterData = logs.map(l => ({ x: l.values[0], y: l.values[1], z: l.values[2], dateString: l.dateString }));
+  const var0IsBool = isBoolType(chain?.variables?.[0]);
+  const var1IsBool = isBoolType(chain?.variables?.[1]);
+
+  /* ---- Scatter data + trend line; add jitter for boolean axes ---- */
+  const scatterData = logs.map(l => ({
+    x: var0IsBool ? l.values[0] + (Math.random() - 0.5) * 0.12 : l.values[0],
+    y: var1IsBool ? l.values[1] + (Math.random() - 0.5) * 0.12 : l.values[1],
+    z: l.values[2], dateString: l.dateString, note: l.note
+  }));
 
   const xVals = scatterData.map(d => d.x);
   const yVals = scatterData.map(d => d.y);
@@ -325,18 +334,21 @@ const CorrelationGraph = ({ logs, chain, rValue, mode, allLogs, allVars, varColo
             formatter={(val) => <span style={{ color: '#a09b8c', fontSize: '0.78rem' }}>{val}</span>}
             wrapperStyle={{ paddingTop: 12 }}
           />
-          {timeVars.map((v, vi) => (
-            <Area
-              key={vi}
-              type="monotone"
-              dataKey={v.name}
-              stroke={colors[vi]}
-              strokeWidth={2}
-              fill={`url(#tl-grad-${vi})`}
-              dot={{ fill: colors[vi], r: 3, strokeWidth: 0 }}
-              animationDuration={800 + vi * 200}
-            />
-          ))}
+          {timeVars.map((v, vi) => {
+            const isB = isBoolType(v);
+            return (
+              <Area
+                key={vi}
+                type={isB ? 'stepAfter' : 'monotone'}
+                dataKey={v.name}
+                stroke={colors[vi]}
+                strokeWidth={isB ? 2.5 : 2}
+                fill={`url(#tl-grad-${vi})`}
+                dot={isB ? false : { fill: colors[vi], r: 3, strokeWidth: 0 }}
+                animationDuration={800 + vi * 200}
+              />
+            );
+          })}
         </AreaChart>
       </ResponsiveContainer>
     );
@@ -362,12 +374,17 @@ const CorrelationGraph = ({ logs, chain, rValue, mode, allLogs, allVars, varColo
         <XAxis
           type="number" dataKey="x" name={chain?.variables[0].name}
           tick={axisStyle} axisLine={axisLine} tickLine={false}
-          label={{ value: `${chain?.variables[0].icon ?? '📊'} ${chain?.variables[0].name} (${chain?.variables[0].unit || ''})`, position: 'insideBottom', offset: -14, fill: '#f59e0b', fontSize: 12 }}
+          tickFormatter={var0IsBool ? boolTick : undefined}
+          ticks={var0IsBool ? [0, 1] : undefined}
+          domain={var0IsBool ? [-0.3, 1.3] : ['auto', 'auto']}
+          label={{ value: `${chain?.variables[0].icon ?? '📊'} ${chain?.variables[0].name}${var0IsBool ? '' : ` (${chain?.variables[0].unit || ''})`}`, position: 'insideBottom', offset: -14, fill: '#f59e0b', fontSize: 12 }}
         />
         <YAxis
           type="number" dataKey="y" name={chain?.variables[1].name}
           tick={axisStyle} axisLine={axisLine} tickLine={false}
-          domain={[0, 'auto']}
+          tickFormatter={var1IsBool ? boolTick : undefined}
+          ticks={var1IsBool ? [0, 1] : undefined}
+          domain={var1IsBool ? [-0.3, 1.3] : [0, 'auto']}
         />
         {chain?.variables[2] && (
           <ZAxis

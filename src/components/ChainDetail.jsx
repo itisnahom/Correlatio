@@ -8,6 +8,7 @@ import NerdModeStats from './NerdModeStats';
 import TimerInput from './TimerInput';
 import ExportCard, { EXPORT_THEMES } from './ExportCard';
 import { calculatePearsonCorrelation, interpretCorrelation } from '../utils/statistics';
+import { useToast, ToastPortal } from './Toast';
 
 const VAR_COLORS = ['#f59e0b', '#10b981', '#f43f5e', '#38bdf8', '#a78bfa'];
 
@@ -64,6 +65,7 @@ const ChainDetail = ({ user }) => {
   // Export Modal state
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportTheme, setExportTheme] = useState(EXPORT_THEMES[0].id);
+  const { toasts, showToast } = useToast();
 
   useEffect(() => { fetchData(); }, [chainId]);
 
@@ -112,6 +114,7 @@ const ChainDetail = ({ user }) => {
       await addDoc(collection(db, `users/${user.uid}/chains/${chainId}/logs`), logDoc);
       setValues(Array.from({ length: chain.variables.length }).fill(''));
       setNote('');
+      showToast('Entry logged! Keep the streak going 🔥', 'success', 2500);
       fetchData();
     } catch (err) { console.error(err); }
     finally { setSubmitting(false); }
@@ -330,6 +333,37 @@ const ChainDetail = ({ user }) => {
               <span>|r| = {absR.toFixed(2)}</span>
               <span>1 (perfect)</span>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Stats Bar */}
+      {logs.length >= 3 && (
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '16px' }}>
+          {vars.map((v, vi) => {
+            const vals = logs.map(l => l.values[vi]).filter(x => x != null);
+            const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
+            const isBool = v.typeId === 'boolean' || v.unit === 'bool';
+            const yesCount = isBool ? vals.filter(x => x === 1).length : null;
+            return (
+              <div key={vi} style={{
+                background: 'var(--surface)', border: '1px solid var(--border)',
+                borderRadius: '10px', padding: '10px 14px', fontSize: '0.78rem', minWidth: '120px',
+              }}>
+                <div style={{ color: VAR_COLORS[vi], fontWeight: 600, marginBottom: '2px' }}>{v.icon} {v.name}</div>
+                {isBool
+                  ? <div style={{ color: 'var(--text-2)' }}>Yes <strong>{yesCount}</strong> / No <strong>{vals.length - yesCount}</strong></div>
+                  : <div style={{ color: 'var(--text-2)' }}>Avg <strong>{parseFloat(avg.toFixed(2))}</strong> {v.unit}</div>
+                }
+              </div>
+            );
+          })}
+          <div style={{
+            background: 'var(--surface)', border: '1px solid var(--border)',
+            borderRadius: '10px', padding: '10px 14px', fontSize: '0.78rem', minWidth: '100px',
+          }}>
+            <div style={{ color: 'var(--text-3)', fontWeight: 600, marginBottom: '2px' }}>📅 Entries</div>
+            <div style={{ color: 'var(--text-2)' }}><strong>{logs.length}</strong> days</div>
           </div>
         </div>
       )}

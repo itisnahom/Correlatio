@@ -3,6 +3,8 @@ import { Link, useLocation } from 'react-router-dom';
 import { db } from '../firebase';
 import { collection, query, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
 import { calculatePearsonCorrelation } from '../utils/statistics';
+import { useToast, ToastPortal } from './Toast';
+import confetti from 'canvas-confetti';
 import { getVarType, VARIABLE_TYPES } from '../utils/variableTypes';
 import VariablePicker from './VariablePicker';
 import { StreakWidget, ActivityHeatmap, calculateStreaks } from './Gamification';
@@ -56,7 +58,7 @@ const Dashboard = ({ user }) => {
     { typeId: null, name: '', unit: '' },
   ]);
   const [creating, setCreating] = useState(false);
-  const [formError, setFormError] = useState('');
+  const { toasts, showToast } = useToast();
 
   useEffect(() => { 
     fetchAll(); 
@@ -75,14 +77,6 @@ const Dashboard = ({ user }) => {
       window.history.replaceState({}, document.title);
     }
   }, []);
-
-  // Auto-fade error
-  useEffect(() => {
-    if (formError) {
-      const t = setTimeout(() => setFormError(''), 4000);
-      return () => clearTimeout(t);
-    }
-  }, [formError]);
 
   const fetchAll = async () => {
     try {
@@ -103,7 +97,14 @@ const Dashboard = ({ user }) => {
         });
       }
       setAllLogDates(allDates);
-      setStreaks(calculateStreaks(allDates));
+      const computedStreaks = calculateStreaks(allDates);
+      setStreaks(computedStreaks);
+      if ([7, 14, 30, 50, 100].includes(computedStreaks.current) && computedStreaks.today) {
+        setTimeout(() => {
+          confetti({ particleCount: 150, spread: 80, origin: { y: 0.8 }, colors: ['#f59e0b', '#10b981', '#f43f5e'] });
+          showToast(`Milestone: ${computedStreaks.current} Day Streak! 🎉`, 'success', 5000);
+        }, 1000);
+      }
       
       const st = {};
       for (const ch of fetched) {
@@ -114,7 +115,18 @@ const Dashboard = ({ user }) => {
           const xData = logs.map(l => l.values[0]);
           const yData = logs.map(l => l.values[1]);
           const r = calculatePearsonCorrelation(xData, yData);
-          st[ch.id] = { r, count: logs.length };
+          let shift = null;
+          if (logs.length > 7) {
+            const sortedLogs = [...logs].sort((a,b) => (a.dateString || '').localeCompare(b.dateString || ''));
+            const prevLogs = sortedLogs.slice(0, sortedLogs.length - 7);
+            if (prevLogs.length >= 3) {
+              const prevR = calculatePearsonCorrelation(prevLogs.map(l => l.values[0]), prevLogs.map(l => l.values[1]));
+              if (prevR !== null && r !== null) {
+                shift = parseFloat((r - prevR).toFixed(3));
+              }
+            }
+          }
+          st[ch.id] = { r, count: logs.length, shift };
         } catch { st[ch.id] = { r: null, count: 0 }; }
       }
       setStats(st);
@@ -138,16 +150,14 @@ const Dashboard = ({ user }) => {
 
   const handleCreate = async (e) => {
     e.preventDefault();
-    setFormError(''); // Reset error
-    
     if (!threadName.trim()) {
-      setFormError('⚠️ Please provide a name for this thread!');
+      showToast('Please provide a name for this thread!', 'error');
       return;
     }
     
     const hasInvalidVars = variables.some(v => !v.name.trim() || !v.typeId);
     if (hasInvalidVars) {
-      setFormError('⚠️ Please ensure all variables have a name and type selected.');
+      showToast('Please ensure all variables have a name and type selected.', 'error');
       return;
     }
     
@@ -194,7 +204,7 @@ const Dashboard = ({ user }) => {
     <div className="fade-up">
       <div className="dashboard-hero">
         <p className="dashboard-greeting">
-          {greeting}, {firstName} <span style={{ fontFamily: '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif' }}>✨</span>
+          {greeting}, {firstName} <span style={{ WebkitTextFillColor: 'initial', color: 'initial' }}>✨</span>
         </p>
         <p className="dashboard-sub">
           {threads.length === 0
@@ -255,7 +265,14 @@ const Dashboard = ({ user }) => {
                   ))}
                 </div>
                 <div className="chain-card-footer">
-                  <span className="chain-card-count">{s.count ?? 0} log{(s.count ?? 0) !== 1 ? 's' : ''}</span>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <span className="chain-card-count">{s.count ?? 0} log{(s.count ?? 0) !== 1 ? 's' : ''}</span>
+                    {Math.abs(s.shift || 0) > 0.2 && (
+                      <span style={{ fontSize: '0.65rem', padding: '2px 6px', background: 'rgba(255,255,255,0.08)', borderRadius: '4px', color: s.shift > 0 ? 'var(--emerald)' : 'var(--rose)' }}>
+                        {s.shift > 0 ? '📈 Trending Up' : '⚡ Shift Detected'}
+                      </span>
+                    )}
+                  </div>
                   <span className="chain-card-cta">Explore →</span>
                 </div>
               </div>
@@ -275,7 +292,7 @@ const Dashboard = ({ user }) => {
           <div className="modal">
             <div className="modal-header">
               <span className="modal-title">New Thread</span>
-              <button className="modal-close" onClick={() => { setShowModal(false); setFormError(''); }}>×</button>
+              <button className="modal-close" onClick={() => { setShowModal(false); }}>×</button>
             </div>
 
             <form onSubmit={handleCreate}>
@@ -343,7 +360,7 @@ const Dashboard = ({ user }) => {
                 >
                   {creating ? 'Creating…' : 'Create Thread'}
                 </button>
-                <button type="button" className="btn btn-ghost" style={{ borderRadius: '10px', padding: '12px 18px' }} onClick={() => { setShowModal(false); setFormError(''); }}>
+                <button type="button" className="btn btn-ghost" style={{ borderRadius: '10px', padding: '12px 18px' }} onClick={() => { setShowModal(false); }}>
                   Cancel
                 </button>
               </div>
@@ -352,19 +369,7 @@ const Dashboard = ({ user }) => {
         </div>
       )}
       
-      {/* Global Error Toast Snackbar */}
-      {formError && (
-        <div className="fade-up" style={{ 
-          position: 'fixed', top: '32px', left: '50%', transform: 'translateX(-50%)', 
-          background: 'var(--bg-2)', color: 'var(--text-1)', padding: '16px 24px', 
-          borderRadius: '12px', fontSize: '0.95rem', fontWeight: 500,
-          border: '1px solid var(--border)',
-          boxShadow: 'var(--shadow-lg)', zIndex: 999999,
-          display: 'flex', alignItems: 'center', gap: '12px', maxWidth: '400px'
-        }}>
-          <span>{formError.replace('⚠️ ', '')}</span>
-        </div>
-      )}
+      <ToastPortal toasts={toasts} />
     </div>
   );
 };

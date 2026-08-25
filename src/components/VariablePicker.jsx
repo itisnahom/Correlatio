@@ -65,20 +65,14 @@ const VariablePicker = ({ label, value, onChange }) => {
             />
           </div>
           <div>
-            <label className="input-label">Unit {selectedType !== 'custom' && <span style={{ color: 'var(--text-3)', textTransform: 'none', letterSpacing: 0 }}>({selectedTypeDef?.unit})</span>}</label>
-            {selectedType === 'custom' ? (
-              <input
-                className="input"
-                type="text"
-                placeholder="e.g. pills, goals, beers"
-                value={customUnit}
-                onChange={handleUnitChange}
-              />
-            ) : (
-              <div className="input" style={{ color: 'var(--text-3)', cursor: 'default' }}>
-                {selectedTypeDef?.unit || '—'}
-              </div>
-            )}
+            <label className="input-label">Unit / Measure</label>
+            <input
+              className="input"
+              type="text"
+              placeholder={selectedTypeDef?.unit || 'e.g. units'}
+              value={value?.unit ?? ''}
+              onChange={(e) => onChange({ ...value, unit: e.target.value })}
+            />
           </div>
         </div>
       )}

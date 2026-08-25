@@ -13,7 +13,7 @@ export const VARIABLE_TYPES = [
   { id: 'glasses',   icon: '💧',  label: 'Glasses',    unit: 'glasses', placeholder: 'e.g. Glasses of water' },
   { id: 'workouts',  icon: '🏋️', label: 'Sessions',   unit: 'sessions',placeholder: 'e.g. Workout sessions' },
   { id: 'percent',   icon: '📊',  label: 'Percent',    unit: '%',       placeholder: 'e.g. Battery level' },
-  { id: 'score',     icon: '🎯',  label: 'Score',      unit: 'pts',     placeholder: 'e.g. Quiz score' },
+  { id: 'score',     icon: '🎯',  label: 'Score',      unit: '%',       placeholder: 'e.g. Test score' },
   { id: 'count',     icon: '🔢',  label: 'Count',      unit: 'times',   placeholder: 'e.g. Times checked phone' },
   { id: 'weight',    icon: '⚖️',  label: 'Weight',     unit: 'kg',      placeholder: 'e.g. Body weight' },
   { id: 'km',        icon: '🏃',  label: 'Distance',   unit: 'km',      placeholder: 'e.g. Distance run' },

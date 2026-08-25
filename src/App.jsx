@@ -8,6 +8,7 @@ import Auth from './components/Auth';
 import Dashboard from './components/Dashboard';
 import ChainDetail from './components/ChainDetail';
 import Basket from './components/Basket';
+import Tree from './components/Tree';
 import './App.css';
 
 function Navbar({ user }) {
@@ -19,11 +20,12 @@ function Navbar({ user }) {
       <div className="nav-left">
         <Link to="/" className="nav-brand">
           <CorrelatioLogo size={18} />
-          <span className="nav-brand-name">Correlatio</span>
+          <span className="nav-brand-name">Correlatio.</span>
         </Link>
         <span className="nav-sep" />
         <Link to="/" className="nav-link">Threads</Link>
         <Link to="/basket" className="nav-link">🧺 Basket</Link>
+        <Link to="/tree" className="nav-link">🌳 Tree</Link>
       </div>
       <div className="nav-user-wrap">
         <button className="nav-avatar-btn" onClick={() => setShowMenu(!showMenu)}>
@@ -78,6 +80,7 @@ function App() {
             <Route path="/login" element={!user ? <Auth user={user} /> : <Navigate to="/" />} />
             <Route path="/chain/:chainId" element={user ? <ChainDetail user={user} /> : <Navigate to="/login" />} />
             <Route path="/basket" element={user ? <Basket user={user} /> : <Navigate to="/login" />} />
+            <Route path="/tree" element={user ? <Tree user={user} /> : <Navigate to="/login" />} />
           </Routes>
         </div>
       </div>

@@ -61,10 +61,46 @@ const Auth = ({ user }) => {
   return (
     <div className="login-page">
       <div className="login-hero">
-        <div className="login-logo-wrap fade-up">
-          <CorrelatioLogo size={32} />
+        <div className="fade-up">
+          <div className="login-logo-hover-zone floating-logo-assembly" style={{ position: 'relative', display: 'inline-block', marginBottom: '28px' }}>
+            <div className="login-logo-wrap" style={{ position: 'relative', zIndex: 10, marginBottom: 0 }}>
+              <CorrelatioLogo size={32} />
+            </div>
+            
+            <div className="features-emitter">
+              <div className="emitted-card card-tr">
+                <div className="emitted-icon">📊</div>
+                <div className="emitted-text">
+                  <div className="emitted-title">Pearson correlation</div>
+                  <div className="emitted-desc">Find hidden links</div>
+                </div>
+              </div>
+              <div className="emitted-card card-br">
+                <div className="emitted-icon">🔗</div>
+                <div className="emitted-text">
+                  <div className="emitted-title">Habit chains</div>
+                  <div className="emitted-desc">Connect variables</div>
+                </div>
+              </div>
+              <div className="emitted-card card-bl">
+                <div className="emitted-icon">📈</div>
+                <div className="emitted-text">
+                  <div className="emitted-title">Trend analysis</div>
+                  <div className="emitted-desc">Visualize progress</div>
+                </div>
+              </div>
+              <div className="emitted-card card-tl">
+                <div className="emitted-icon">🤓</div>
+                <div className="emitted-text">
+                  <div className="emitted-title">Nerd mode</div>
+                  <div className="emitted-desc">Deep insights</div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-        <h1 className="login-title">Correlatio</h1>
+
+        <h1 className="login-title">Correlatio.</h1>
         <p className="login-subtitle">
           Discover the hidden patterns in your daily life. Log your habits and let the data reveal what's really driving your mood, focus, and energy.
         </p>
@@ -77,21 +113,6 @@ const Auth = ({ user }) => {
           <GoogleIcon />
           {isLoggingIn ? 'Opening popup...' : 'Continue with Google'}
         </button>
-      </div>
-
-      <div className="login-features">
-        {[
-          ['📊', 'Pearson correlation'],
-          ['🔗', 'Habit chains'],
-          ['📈', 'Trend analysis'],
-          ['🤓', 'Nerd mode'],
-          ['⚡', 'Real-time stats'],
-        ].map(([icon, text]) => (
-          <div key={text} className="feature-pill">
-            <span>{icon}</span>
-            <span>{text}</span>
-          </div>
-        ))}
       </div>
     </div>
   );
