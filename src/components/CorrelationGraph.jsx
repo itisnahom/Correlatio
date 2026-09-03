@@ -5,29 +5,33 @@ import {
   Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis
 } from 'recharts';
 
-import { analyzePattern, calculatePearsonCorrelation } from '../utils/statistics';
+import { analyzePattern, calculatePearsonCorrelation, detectOutliers, rollingAverage } from '../utils/statistics';
 
-/* ---- Animated scatter dot with glow ---- */
+/* ---- Animated scatter dot with outlier ring ---- */
 const Dot = (props) => {
-  const { cx, cy, fill, index, payload, is3D, zMin, zMax } = props;
+  const { cx, cy, fill, index, payload, is3D, zMin, zMax, isOutlier, isExport } = props;
   const hasNote = !!payload?.note;
   
   let baseR = 6;
   if (is3D && payload?.z !== undefined) {
     const range = (zMax - zMin) || 1;
     const ratio = Math.max(0, Math.min(1, (payload.z - zMin) / range));
-    baseR = 6 + (ratio * 12); // Scale between 6px and 18px
+    baseR = 6 + (ratio * 12);
   }
   
   const glowR = hasNote ? baseR + 4 : baseR * 1.3;
 
   return (
     <g>
-      <circle cx={cx} cy={cy} r={glowR} fill={hasNote ? 'var(--amber)' : fill} opacity={hasNote ? 0.2 : 0.08}>
-        <animate attributeName="r" values={`${glowR};${glowR+6};${glowR}`} dur="3s" repeatCount="indefinite" begin={`${(index || 0) * 0.1}s`} />
+      {/* Outlier ring */}
+      {isOutlier && (
+        <circle cx={cx} cy={cy} r={baseR + 7} fill="none" stroke="#f43f5e" strokeWidth={1.5} strokeDasharray="3 2" opacity={0.7} />
+      )}
+      <circle cx={cx} cy={cy} r={glowR} fill={isOutlier ? '#f43f5e' : (hasNote ? 'var(--amber)' : fill)} opacity={hasNote ? 0.2 : 0.08}>
+        {!isExport && <animate attributeName="r" values={`${glowR};${glowR+6};${glowR}`} dur="3s" repeatCount="indefinite" begin={`${(index || 0) * 0.1}s`} />}
       </circle>
-      <circle cx={cx} cy={cy} r={baseR} fill={fill} opacity={0.9}>
-        <animate attributeName="opacity" values="0.7;1;0.7" dur="2s" repeatCount="indefinite" />
+      <circle cx={cx} cy={cy} r={baseR} fill={isOutlier ? '#f43f5e' : fill} opacity={0.9}>
+        {!isExport && <animate attributeName="opacity" values="0.7;1;0.7" dur="2s" repeatCount="indefinite" />}
       </circle>
       <circle cx={cx} cy={cy} r={baseR * 0.3} fill={hasNote ? 'var(--amber)' : "#faf8f3"} opacity={0.8} />
     </g>
@@ -192,7 +196,7 @@ const HeatMap = ({ logs, allVars, varColors }) => {
   );
 };
 
-const CorrelationGraph = ({ logs, chain, rValue, mode, allLogs, allVars, varColors }) => {
+const CorrelationGraph = ({ logs, chain, rValue, mode, allLogs, allVars, varColors, isExport = false }) => {
   const lineColor = rValue > 0.1 ? '#10b981' : rValue < -0.1 ? '#f43f5e' : '#a09b8c';
 
   const var0IsBool = isBoolType(chain?.variables?.[0]);
@@ -215,7 +219,11 @@ const CorrelationGraph = ({ logs, chain, rValue, mode, allLogs, allVars, varColo
 
   const pattern = analyzePattern(xVals, yVals);
 
+  /* ---- Outlier detection ---- */
+  const outlierIndices = useMemo(() => detectOutliers(xVals, yVals), [logs]);
+
   let trendData = [];
+  let confidenceBand = [];
   if (pattern.type !== 'linear' && pattern.quad) {
     const step = (xMax - xMin) / 50;
     for (let x = xMin; x <= xMax; x += step) {
@@ -229,6 +237,23 @@ const CorrelationGraph = ({ logs, chain, rValue, mode, allLogs, allVars, varColo
     const ssXY = scatterData.reduce((s, d) => s + (d.x - meanX) * (d.y - meanY), 0);
     const slope = ssXX ? ssXY / ssXX : 0;
     const intercept = meanY - slope * meanX;
+
+    // Compute standard error of estimate for confidence band
+    const ssRes = scatterData.reduce((s, d) => {
+      const yHat = slope * d.x + intercept;
+      return s + (d.y - yHat) ** 2;
+    }, 0);
+    const se = n > 2 ? Math.sqrt(ssRes / (n - 2)) : 0;
+
+    const steps = 20;
+    const stepSize = (xMax - xMin) / steps;
+    for (let i = 0; i <= steps; i++) {
+      const x = xMin + i * stepSize;
+      const yFit = slope * x + intercept;
+      const margin = se * 1.96 * Math.sqrt(1 / n + (x - meanX) ** 2 / (ssXX || 1));
+      confidenceBand.push({ x, yLow: yFit - margin, yHigh: yFit + margin });
+    }
+
     trendData = [{ x: xMin, y: slope * xMin + intercept }, { x: xMax, y: slope * xMax + intercept }];
   }
 
@@ -290,7 +315,7 @@ const CorrelationGraph = ({ logs, chain, rValue, mode, allLogs, allVars, varColo
           <PolarAngleAxis dataKey="subject" tick={{ fill: '#a09b8c', fontSize: '0.75rem' }} />
           <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
           <Tooltip content={<CustomRadarTip />} />
-          <Radar name="Average (Normalized)" dataKey="A" stroke="var(--emerald)" fill="var(--emerald)" fillOpacity={0.3} />
+          <Radar name="Average (Normalized)" dataKey="A" stroke="var(--emerald)" fill="var(--emerald)" fillOpacity={0.3} isAnimationActive={!isExport} />
         </RadarChart>
       </ResponsiveContainer>
     );
@@ -303,54 +328,89 @@ const CorrelationGraph = ({ logs, chain, rValue, mode, allLogs, allVars, varColo
       { name: chain?.variables[1].name, icon: chain?.variables[1].icon },
     ];
     const useLogs = allLogs || logs;
-    const getVal = (log, idx) => {
-      return log.values[idx];
-    };
+    const getVal = (log, idx) => log.values[idx];
+
+    // Compute rolling averages per variable
+    const rollingByVar = timeVars.map((v, vi) => {
+      const vals = useLogs.map(l => getVal(l, vi));
+      return rollingAverage(vals, 7);
+    });
 
     const timelineData = useLogs.map((l, i) => {
       const entry = { day: l.dateString ?? `Day ${i + 1}` };
-      timeVars.forEach((v, vi) => { entry[v.name] = getVal(l, vi); });
+      timeVars.forEach((v, vi) => {
+        entry[v.name] = getVal(l, vi);
+        entry[`${v.name}_7d`] = parseFloat((rollingByVar[vi][i] ?? 0).toFixed(2));
+      });
       return entry;
     });
 
     const colors = varColors || ['#f59e0b', '#10b981', '#f43f5e', '#38bdf8', '#a78bfa'];
 
     return (
-      <ResponsiveContainer width="100%" height={320}>
-        <AreaChart data={timelineData} margin={{ top: 10, right: 14, bottom: 10, left: -10 }}>
-          <defs>
+      <div>
+        <ResponsiveContainer width="100%" height={320}>
+          <AreaChart data={timelineData} margin={{ top: 10, right: 14, bottom: 10, left: -10 }}>
+            <defs>
+              {timeVars.map((v, vi) => (
+                <linearGradient key={vi} id={`tl-grad-${vi}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={colors[vi]} stopOpacity={0.25} />
+                  <stop offset="95%" stopColor={colors[vi]} stopOpacity={0} />
+                </linearGradient>
+              ))}
+            </defs>
+            <CartesianGrid {...gridStyle} />
+            <XAxis dataKey="day" tick={axisStyle} axisLine={axisLine} tickLine={false} />
+            <YAxis tick={axisStyle} axisLine={axisLine} tickLine={false} />
+            <Tooltip content={<LineTip />} />
+            <Legend
+              formatter={(val) => {
+                const is7d = val.endsWith('_7d');
+                const base = is7d ? val.replace('_7d', '') : val;
+                return <span style={{ color: '#a09b8c', fontSize: '0.78rem' }}>{is7d ? `${base} (7d avg)` : base}</span>;
+              }}
+              wrapperStyle={{ paddingTop: 12 }}
+            />
+            {timeVars.map((v, vi) => {
+              const isB = isBoolType(v);
+              return (
+                <Area
+                  key={vi}
+                  type={isB ? 'stepAfter' : 'monotone'}
+                  dataKey={v.name}
+                  stroke={colors[vi]}
+                  strokeWidth={isB ? 2.5 : 2}
+                  fill={`url(#tl-grad-${vi})`}
+                  dot={isB ? false : { fill: colors[vi], r: 3, strokeWidth: 0 }}
+                  animationDuration={800 + vi * 200}
+                  isAnimationActive={!isExport}
+                />
+              );
+            })}
+            {/* Rolling average lines — dimmer, no fill */}
             {timeVars.map((v, vi) => (
-              <linearGradient key={vi} id={`tl-grad-${vi}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor={colors[vi]} stopOpacity={0.25} />
-                <stop offset="95%" stopColor={colors[vi]} stopOpacity={0} />
-              </linearGradient>
+              !isBoolType(v) && (
+                <Area
+                  key={`${vi}-roll`}
+                  type="monotone"
+                  dataKey={`${v.name}_7d`}
+                  stroke={colors[vi]}
+                  strokeWidth={1.5}
+                  strokeDasharray="4 3"
+                  fill="none"
+                  dot={false}
+                  opacity={0.45}
+                  animationDuration={1000 + vi * 200}
+                  isAnimationActive={!isExport}
+                />
+              )
             ))}
-          </defs>
-          <CartesianGrid {...gridStyle} />
-          <XAxis dataKey="day" tick={axisStyle} axisLine={axisLine} tickLine={false} />
-          <YAxis tick={axisStyle} axisLine={axisLine} tickLine={false} />
-          <Tooltip content={<LineTip />} />
-          <Legend
-            formatter={(val) => <span style={{ color: '#a09b8c', fontSize: '0.78rem' }}>{val}</span>}
-            wrapperStyle={{ paddingTop: 12 }}
-          />
-          {timeVars.map((v, vi) => {
-            const isB = isBoolType(v);
-            return (
-              <Area
-                key={vi}
-                type={isB ? 'stepAfter' : 'monotone'}
-                dataKey={v.name}
-                stroke={colors[vi]}
-                strokeWidth={isB ? 2.5 : 2}
-                fill={`url(#tl-grad-${vi})`}
-                dot={isB ? false : { fill: colors[vi], r: 3, strokeWidth: 0 }}
-                animationDuration={800 + vi * 200}
-              />
-            );
-          })}
-        </AreaChart>
-      </ResponsiveContainer>
+          </AreaChart>
+        </ResponsiveContainer>
+        <div style={{ fontSize: '0.68rem', color: 'var(--text-3)', textAlign: 'center', marginTop: 4 }}>
+          Dashed lines show the 7-day rolling average to smooth daily noise.
+        </div>
+      </div>
     );
   }
 
@@ -361,6 +421,14 @@ const CorrelationGraph = ({ logs, chain, rValue, mode, allLogs, allVars, varColo
       <div style={{ color: '#10b981', fontSize: '0.75rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px', paddingLeft: '12px', marginBottom: '4px' }}>
         <span>{chain?.variables[1].icon ?? '📈'}</span> {chain?.variables[1].name} {chain?.variables[1].unit && <span style={{ opacity: 0.6 }}>({chain.variables[1].unit})</span>}
       </div>
+
+      {/* Outlier legend */}
+      {outlierIndices.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingLeft: 12, marginBottom: 6, fontSize: '0.7rem', color: 'var(--text-3)' }}>
+          <svg width={14} height={14}><circle cx={7} cy={7} r={5} fill="none" stroke="#f43f5e" strokeWidth={1.5} strokeDasharray="2 1.5" /></svg>
+          {outlierIndices.length} outlier{outlierIndices.length > 1 ? 's' : ''} detected
+        </div>
+      )}
       
       <ResponsiveContainer width="100%" height={320}>
         <ScatterChart margin={{ top: 10, right: 14, bottom: 22, left: -10 }}>
@@ -369,6 +437,10 @@ const CorrelationGraph = ({ logs, chain, rValue, mode, allLogs, allVars, varColo
             <stop offset="0%" stopColor={lineColor} stopOpacity={0.15} />
             <stop offset="100%" stopColor={lineColor} stopOpacity={0} />
           </radialGradient>
+          <linearGradient id="conf-band-fill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={lineColor} stopOpacity={0.12} />
+            <stop offset="100%" stopColor={lineColor} stopOpacity={0.03} />
+          </linearGradient>
         </defs>
         <CartesianGrid {...gridStyle} />
         <XAxis
@@ -394,27 +466,44 @@ const CorrelationGraph = ({ logs, chain, rValue, mode, allLogs, allVars, varColo
         )}
         <Tooltip content={<ScatterTip chain={chain} />} cursor={false} />
 
+        {/* Confidence band (linear mode only) */}
+        {!chain?.var3Name && confidenceBand.length > 0 && (
+          <>
+            <Scatter
+              name="_confHigh" data={confidenceBand.map(d => ({ x: d.x, y: d.yHigh }))}
+              line={{ stroke: lineColor, strokeWidth: 1, strokeDasharray: '2 3', opacity: 0.3 }}
+              shape={() => null} legendType="none" isAnimationActive={!isExport}
+            />
+            <Scatter
+              name="_confLow" data={confidenceBand.map(d => ({ x: d.x, y: d.yLow }))}
+              line={{ stroke: lineColor, strokeWidth: 1, strokeDasharray: '2 3', opacity: 0.3 }}
+              shape={() => null} legendType="none" isAnimationActive={!isExport}
+            />
+          </>
+        )}
+
         {/* Trend line with glow (hide if 3D bubble chart) */}
         {!chain?.var3Name && (
           <>
             <Scatter
               name="_trend" data={trendData}
               line={{ stroke: lineColor, strokeWidth: 2, strokeDasharray: '6 4', opacity: 0.6 }}
-              shape={() => null} legendType="none"
+              shape={() => null} legendType="none" isAnimationActive={!isExport}
             />
             {/* Trend line glow shadow */}
             <Scatter
               name="_trendglow" data={trendData}
               line={{ stroke: lineColor, strokeWidth: 6, opacity: 0.1 }}
-              shape={() => null} legendType="none"
+              shape={() => null} legendType="none" isAnimationActive={!isExport}
             />
           </>
         )}
         {/* Data points */}
         <Scatter
           name="Data" data={scatterData}
-          shape={(props) => <Dot {...props} fill="#f59e0b" is3D={!!chain?.var3Name} zMin={zMin} zMax={zMax} />}
+          shape={(props) => <Dot {...props} fill="#f59e0b" is3D={!!chain?.var3Name} zMin={zMin} zMax={zMax} isOutlier={outlierIndices.includes(props.index)} isExport={isExport} />}
           animationDuration={1200}
+          isAnimationActive={!isExport}
         />
       </ScatterChart>
     </ResponsiveContainer>
