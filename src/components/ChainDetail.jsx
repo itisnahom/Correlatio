@@ -56,7 +56,11 @@ const ChainDetail = ({ user }) => {
 
   // Dynamic values for N variables
   const [values, setValues] = useState([]);
-  const [nerdMode, setNerdMode] = useState(false);
+  const [nerdMode, setNerdMode] = useState(() => JSON.parse(localStorage.getItem('correlatio_nerdMode') ?? 'true'));
+  const toggleNerdMode = (val) => {
+    setNerdMode(val);
+    localStorage.setItem('correlatio_nerdMode', JSON.stringify(val));
+  };
   const [submitting, setSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState('scatter');
   const [note, setNote] = useState('');
@@ -273,7 +277,7 @@ const ChainDetail = ({ user }) => {
             📸 Export
           </button>
           <label className="toggle-wrap" htmlFor="nerd-mode">
-            <input type="checkbox" id="nerd-mode" checked={nerdMode} onChange={e => setNerdMode(e.target.checked)} />
+            <input type="checkbox" id="nerd-mode" checked={nerdMode} onChange={e => toggleNerdMode(e.target.checked)} />
             <div className="toggle-track"><div className="toggle-thumb" /></div>
             <span className="nerd-toggle-text">🤓 Nerd Mode</span>
           </label>
@@ -744,6 +748,8 @@ const ChainDetail = ({ user }) => {
                       logs={logs}
                       themeId={exportTheme}
                       user={user}
+                      selectedPair={selectedPair}
+                      isAllThree={isAllThree}
                     />
                   </div>
                 </div>

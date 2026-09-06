@@ -361,7 +361,7 @@ const AiSection = ({ chain, logs }) => {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-const NerdModeStats = ({ rValue, n, chain, logs, selectedPair = [0, 1] }) => {
+const NerdModeStats = ({ rValue, n, chain, logs, selectedPair = [0, 1], isExport = false, isAllThree = false }) => {
   const [activeTab, setActiveTab] = useState(0);
 
   let xVals = [], yVals = [];
@@ -370,6 +370,33 @@ const NerdModeStats = ({ rValue, n, chain, logs, selectedPair = [0, 1] }) => {
     yVals = logs.map(l => l.values[selectedPair[1]]);
   }
   const pattern = logs ? analyzePattern(xVals, yVals) : { type: 'linear', linearR: rValue };
+
+  if (isExport) {
+    return (
+      <div style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', gap: '30px' }}>
+        {!isAllThree && (
+          <div style={{ padding: '20px', background: 'rgba(255,252,245,0.02)', border: '1px solid rgba(255,252,245,0.08)', borderRadius: '16px' }}>
+            <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#f59e0b', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              ⚛ Statistical Breakdown
+            </div>
+            <StatsTab rValue={rValue} n={n} chain={chain} pattern={pattern} selectedPair={selectedPair} />
+          </div>
+        )}
+        <div style={{ padding: '20px', background: 'rgba(255,252,245,0.02)', border: '1px solid rgba(255,252,245,0.08)', borderRadius: '16px' }}>
+          <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#f59e0b', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            📅 Time Patterns
+          </div>
+          <TimePatternsTab logs={logs} chain={chain} selectedPair={selectedPair} />
+        </div>
+        <div style={{ padding: '20px', background: 'rgba(255,252,245,0.02)', border: '1px solid rgba(255,252,245,0.08)', borderRadius: '16px' }}>
+          <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#f59e0b', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            ⏳ Lag Analysis
+          </div>
+          <LagTab logs={logs} chain={chain} selectedPair={selectedPair} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="card nerd-panel">

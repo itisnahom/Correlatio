@@ -1,6 +1,7 @@
 import React from 'react';
 import { EXPORT_THEMES } from './ExportCard';
 import CorrelationGraph from './CorrelationGraph';
+import NerdModeStats from './NerdModeStats';
 import {
   interpretCorrelation,
   calculatePValue,
@@ -13,7 +14,7 @@ import {
 
 const VAR_COLORS = ['#f59e0b', '#10b981', '#f43f5e', '#38bdf8', '#a78bfa'];
 
-const ExportReport = React.forwardRef(({ chain, rValue, logs = [], themeId, user }, ref) => {
+const ExportReport = React.forwardRef(({ chain, rValue, logs = [], themeId, user, selectedPair = [0, 1], isAllThree = false }, ref) => {
   const theme = EXPORT_THEMES.find(t => t.id === themeId) || EXPORT_THEMES[0];
   const absR = rValue !== null ? Math.abs(rValue) : 0;
   const vars = chain?.variables || [];
@@ -25,18 +26,20 @@ const ExportReport = React.forwardRef(({ chain, rValue, logs = [], themeId, user
   const rSquared = rValue !== null ? (rValue * rValue * 100).toFixed(1) : '0';
   const adh = adherenceStats(logs, 30);
 
-  const xVals = logs.map(l => l.values?.[0]).filter(v => v != null);
-  const yVals = logs.map(l => l.values?.[1]).filter(v => v != null);
+  const xVals = logs.map(l => l.values?.[selectedPair[0]]).filter(v => v != null);
+  const yVals = logs.map(l => l.values?.[selectedPair[1]]).filter(v => v != null);
 
-  const impact = computeImpactStatement(
+  const impact = isAllThree ? null : computeImpactStatement(
     xVals,
     yVals,
-    vars[0]?.name || 'Var A',
-    vars[1]?.name || 'Var B',
-    vars[1]?.unit || ''
+    vars[selectedPair[0]]?.name || 'Var A',
+    vars[selectedPair[1]]?.name || 'Var B',
+    vars[selectedPair[1]]?.unit || ''
   );
 
-  const interpretation = interpretCorrelation(rValue, vars[0]?.name, vars[1]?.name);
+  const interpretation = isAllThree 
+    ? "Multivariate trend analysis" 
+    : interpretCorrelation(rValue, vars[selectedPair[0]]?.name, vars[selectedPair[1]]?.name);
   const firstName = user?.displayName?.split(' ')[0] || user?.displayName || 'User';
 
   return (
@@ -160,14 +163,25 @@ const ExportReport = React.forwardRef(({ chain, rValue, logs = [], themeId, user
             </div>
           </div>
 
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '4.2rem', fontWeight: 900, lineHeight: '1em', letterSpacing: '-0.03em' }}>
-              {absR.toFixed(2)}
+          {isAllThree ? (
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: '2.5rem', fontWeight: 900, lineHeight: '1.2em', letterSpacing: '-0.02em', color: '#fff' }}>
+                Multivariate
+              </div>
+              <div style={{ fontSize: '0.85rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', opacity: 0.9 }}>
+                3-Way Intersection
+              </div>
             </div>
-            <div style={{ fontSize: '0.85rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', opacity: 0.9 }}>
-              PEARSON |r| SCORE
+          ) : (
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: '4.2rem', fontWeight: 900, lineHeight: '1em', letterSpacing: '-0.03em' }}>
+                {absR.toFixed(2)}
+              </div>
+              <div style={{ fontSize: '0.85rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', opacity: 0.9 }}>
+                PEARSON |r| SCORE
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         <div style={{ marginTop: '24px', paddingTop: '18px', borderTop: '1px solid rgba(255,255,255,0.2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative', zIndex: 3 }}>
@@ -175,7 +189,7 @@ const ExportReport = React.forwardRef(({ chain, rValue, logs = [], themeId, user
             {interpretation}
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
-            {pVal !== null && (
+            {!isAllThree && pVal !== null && (
               <span style={{
                 background: isSig ? 'rgba(16,185,129,0.3)' : 'rgba(255,255,255,0.2)',
                 border: '1px solid rgba(255,255,255,0.3)',
@@ -201,37 +215,39 @@ const ExportReport = React.forwardRef(({ chain, rValue, logs = [], themeId, user
       </div>
 
       {/* Key Statistical Metrics Grid */}
-      <div style={{ display: 'flex', gap: '14px', zIndex: 2 }}>
-        <div style={{ flex: 1, background: 'rgba(255,252,245,0.03)', border: '1px solid rgba(255,252,245,0.08)', borderRadius: '14px', padding: '16px' }}>
-          <div style={{ fontSize: '0.7rem', color: '#a09b8c', textTransform: 'uppercase', fontWeight: 600, marginBottom: '4px' }}>R² Variance</div>
-          <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#faf8f3' }}>{rSquared}%</div>
-          <div style={{ fontSize: '0.65rem', color: '#a09b8c', marginTop: '2px' }}>Variation explained</div>
-        </div>
-
-        <div style={{ flex: 1, background: 'rgba(255,252,245,0.03)', border: '1px solid rgba(255,252,245,0.08)', borderRadius: '14px', padding: '16px' }}>
-          <div style={{ fontSize: '0.7rem', color: '#a09b8c', textTransform: 'uppercase', fontWeight: 600, marginBottom: '4px' }}>Significance</div>
-          <div style={{ fontSize: '1.4rem', fontWeight: 800, color: isSig ? '#10b981' : '#a09b8c' }}>
-            {pVal !== null ? (pVal < 0.01 ? 'p < 0.01' : pVal < 0.05 ? 'p < 0.05' : 'p > 0.05') : '—'}
+      {!isAllThree && (
+        <div style={{ display: 'flex', gap: '14px', zIndex: 2 }}>
+          <div style={{ flex: 1, background: 'rgba(255,252,245,0.03)', border: '1px solid rgba(255,252,245,0.08)', borderRadius: '14px', padding: '16px' }}>
+            <div style={{ fontSize: '0.7rem', color: '#a09b8c', textTransform: 'uppercase', fontWeight: 600, marginBottom: '4px' }}>R² Variance</div>
+            <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#faf8f3' }}>{rSquared}%</div>
+            <div style={{ fontSize: '0.65rem', color: '#a09b8c', marginTop: '2px' }}>Variation explained</div>
           </div>
-          <div style={{ fontSize: '0.65rem', color: '#a09b8c', marginTop: '2px' }}>{isSig ? 'Reliable signal' : 'Requires more logs'}</div>
-        </div>
 
-        <div style={{ flex: 1, background: 'rgba(255,252,245,0.03)', border: '1px solid rgba(255,252,245,0.08)', borderRadius: '14px', padding: '16px' }}>
-          <div style={{ fontSize: '0.7rem', color: '#a09b8c', textTransform: 'uppercase', fontWeight: 600, marginBottom: '4px' }}>Confidence (95%)</div>
-          <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#faf8f3', marginTop: '4px' }}>
-            {ci ? `[${ci.lower.toFixed(2)}, ${ci.upper.toFixed(2)}]` : '—'}
+          <div style={{ flex: 1, background: 'rgba(255,252,245,0.03)', border: '1px solid rgba(255,252,245,0.08)', borderRadius: '14px', padding: '16px' }}>
+            <div style={{ fontSize: '0.7rem', color: '#a09b8c', textTransform: 'uppercase', fontWeight: 600, marginBottom: '4px' }}>Significance</div>
+            <div style={{ fontSize: '1.4rem', fontWeight: 800, color: isSig ? '#10b981' : '#a09b8c' }}>
+              {pVal !== null ? (pVal < 0.01 ? 'p < 0.01' : pVal < 0.05 ? 'p < 0.05' : 'p > 0.05') : '—'}
+            </div>
+            <div style={{ fontSize: '0.65rem', color: '#a09b8c', marginTop: '2px' }}>{isSig ? 'Reliable signal' : 'Requires more logs'}</div>
           </div>
-          <div style={{ fontSize: '0.65rem', color: '#a09b8c', marginTop: '4px' }}>Fisher z-transformed</div>
-        </div>
 
-        <div style={{ flex: 1, background: 'rgba(255,252,245,0.03)', border: '1px solid rgba(255,252,245,0.08)', borderRadius: '14px', padding: '16px' }}>
-          <div style={{ fontSize: '0.7rem', color: '#a09b8c', textTransform: 'uppercase', fontWeight: 600, marginBottom: '4px' }}>Consistency</div>
-          <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#f59e0b' }}>
-            {(adh.adherence * 100).toFixed(0)}%
+          <div style={{ flex: 1, background: 'rgba(255,252,245,0.03)', border: '1px solid rgba(255,252,245,0.08)', borderRadius: '14px', padding: '16px' }}>
+            <div style={{ fontSize: '0.7rem', color: '#a09b8c', textTransform: 'uppercase', fontWeight: 600, marginBottom: '4px' }}>Confidence (95%)</div>
+            <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#faf8f3', marginTop: '4px' }}>
+              {ci ? `[${ci.lower.toFixed(2)}, ${ci.upper.toFixed(2)}]` : '—'}
+            </div>
+            <div style={{ fontSize: '0.65rem', color: '#a09b8c', marginTop: '4px' }}>Fisher z-transformed</div>
           </div>
-          <div style={{ fontSize: '0.65rem', color: '#a09b8c', marginTop: '2px' }}>Streak: {adh.currentStreak} days (Best: {adh.longestStreak})</div>
+
+          <div style={{ flex: 1, background: 'rgba(255,252,245,0.03)', border: '1px solid rgba(255,252,245,0.08)', borderRadius: '14px', padding: '16px' }}>
+            <div style={{ fontSize: '0.7rem', color: '#a09b8c', textTransform: 'uppercase', fontWeight: 600, marginBottom: '4px' }}>Consistency</div>
+            <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#f59e0b' }}>
+              {(adh.adherence * 100).toFixed(0)}%
+            </div>
+            <div style={{ fontSize: '0.65rem', color: '#a09b8c', marginTop: '2px' }}>Streak: {adh.currentStreak} days (Best: {adh.longestStreak})</div>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Impact Statement Callout */}
       {impact && (
@@ -349,23 +365,23 @@ const ExportReport = React.forwardRef(({ chain, rValue, logs = [], themeId, user
                   <th style={{ padding: '10px 14px', color: '#a09b8c', fontWeight: 600 }}>Date</th>
                   {vars.map((v, vi) => (
                     <th key={vi} style={{ padding: '10px 14px', color: VAR_COLORS[vi], fontWeight: 600 }}>
-                      {v.icon} {v.name}
+                      {v.name} {v.unit ? `(${v.unit})` : ''}
                     </th>
                   ))}
                   <th style={{ padding: '10px 14px', color: '#a09b8c', fontWeight: 600 }}>Notes</th>
                 </tr>
               </thead>
               <tbody>
-                {logs.slice().reverse().slice(0, 6).map((log, li) => (
-                  <tr key={log.id || li} style={{ borderBottom: li !== 5 ? '1px solid rgba(255,252,245,0.04)' : 'none' }}>
-                    <td style={{ padding: '9px 14px', color: '#a09b8c' }}>{log.dateString || `Entry ${li + 1}`}</td>
+                {logs.slice(0, 6).map((log, i) => (
+                  <tr key={i} style={{ borderBottom: i < Math.min(logs.length, 6) - 1 ? '1px solid rgba(255,252,245,0.04)' : 'none' }}>
+                    <td style={{ padding: '10px 14px', color: '#faf8f3' }}>{log.dateString || new Date(log.createdAt?.seconds * 1000).toLocaleDateString()}</td>
                     {vars.map((v, vi) => (
-                      <td key={vi} style={{ padding: '9px 14px', fontWeight: 600, color: '#faf8f3' }}>
-                        {log.values?.[vi] !== undefined ? log.values[vi] : '—'} {v.unit && log.values?.[vi] !== undefined ? v.unit : ''}
+                      <td key={vi} style={{ padding: '10px 14px', color: 'rgba(255,252,245,0.8)' }}>
+                        {log.values?.[vi] !== undefined ? log.values[vi] : '—'}
                       </td>
                     ))}
-                    <td style={{ padding: '9px 14px', color: '#a09b8c', fontStyle: 'italic', maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {log.note ? `"${log.note}"` : '—'}
+                    <td style={{ padding: '10px 14px', color: 'rgba(255,252,245,0.6)', maxWidth: '200px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {log.note || '—'}
                     </td>
                   </tr>
                 ))}
@@ -374,6 +390,17 @@ const ExportReport = React.forwardRef(({ chain, rValue, logs = [], themeId, user
           </div>
         </div>
       )}
+
+      {/* Nerd Mode Stats section for PDF */}
+      <NerdModeStats 
+        rValue={rValue} 
+        n={n} 
+        chain={chain} 
+        logs={logs} 
+        selectedPair={selectedPair} 
+        isExport={true} 
+        isAllThree={isAllThree}
+      />
 
       {/* Branded Footer */}
       <div style={{ marginTop: 'auto', paddingTop: '18px', borderTop: '1px solid rgba(255,252,245,0.08)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.72rem', color: '#555047', zIndex: 2 }}>
