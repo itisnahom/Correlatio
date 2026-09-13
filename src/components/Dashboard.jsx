@@ -21,8 +21,8 @@ const CARD_ACCENTS = [
 
 const VAR_COLORS = ['#f59e0b', '#10b981', '#f43f5e', '#38bdf8', '#a78bfa'];
 
-const getRClass = (r) => r === null ? 'none' : r > 0.1 ? 'pos' : r < -0.1 ? 'neg' : 'none';
-const getRLabel = (r) => r === null ? '—' : (r > 0 ? '+' : '') + r.toFixed(2);
+const getRClass = (r) => r == null || isNaN(r) ? 'none' : r > 0.1 ? 'pos' : r < -0.1 ? 'neg' : 'none';
+const getRLabel = (r) => r == null || isNaN(r) ? '—' : (r > 0 ? '+' : '') + Number(r).toFixed(2);
 
 const normalizeThread = (ch) => {
   if (ch.variables) return ch;
@@ -46,7 +46,17 @@ const Dashboard = ({ user }) => {
   const [stats, setStats] = useState({});
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [showSeedModal, setShowSeedModal] = useState(false);
+  const [isSeeding, setIsSeeding] = useState(false);
+  const [prefillLogs, setPrefillLogs] = useState(null);
   
+  useEffect(() => {
+    if (location.state?.prefillLogs) {
+      setPrefillLogs(location.state.prefillLogs);
+      setShowModal(true);
+    }
+  }, [location.state]);
+
   // Gamification state
   const [allLogDates, setAllLogDates] = useState([]);
   const [streaks, setStreaks] = useState({ current: 0, longest: 0, today: false });
@@ -93,7 +103,7 @@ const Dashboard = ({ user }) => {
         const logsSnap = await getDocs(collection(db, `users/${user.uid}/chains/${th.id}/logs`));
         logsSnap.forEach(l => {
           const data = l.data();
-          if (data.dateString) allDates.push(data.dateString);
+          if (data.dateString && !data.isTestData) allDates.push(data.dateString);
         });
       }
       setAllLogDates(allDates);
@@ -185,11 +195,38 @@ const Dashboard = ({ user }) => {
       setThreads(prev => [...prev, newThread]);
       setStats(prev => ({ ...prev, [ref.id]: { r: null, count: 0 } }));
 
+      if (prefillLogs && prefillLogs.validDates && prefillLogs.dateMap) {
+        let count = 0;
+        for (const date of prefillLogs.validDates) {
+          const vals = vars.map(v => prefillLogs.dateMap[date][v.name]);
+          if (vals.every(val => val !== undefined && val !== null)) {
+            await addDoc(collection(db, `users/${user.uid}/chains/${ref.id}/logs`), {
+              dateString: date,
+              values: vals,
+              createdAt: serverTimestamp()
+            });
+            count++;
+          }
+        }
+        if (count > 0) showToast(`Pre-filled ${count} logs!`, 'success');
+      }
       setShowModal(false);
       setThreadName('');
       setVariables([{ typeId: null, name: '', unit: '' }, { typeId: null, name: '', unit: '' }]);
+      setPrefillLogs(null);
+      fetchAll();
     } catch (err) { console.error(err); }
     finally { setCreating(false); }
+  };
+
+  const handleSeedTestData = async () => {
+    setIsSeeding(true);
+    try {
+      await seedTestData(user.uid);
+      showToast('Seeded test data!', 'success');
+      setShowSeedModal(false);
+      window.location.reload();
+    } catch(e) { showToast('Failed', 'error'); } finally { setIsSeeding(false); }
   };
 
   const greeting = (() => {
@@ -201,6 +238,7 @@ const Dashboard = ({ user }) => {
   if (loading) return <div className="loading-screen"><div className="spinner" /><span>Loading…</span></div>;
 
   return (
+    <>
     <div className="fade-up">
       <div className="dashboard-hero">
         <p className="dashboard-greeting">
@@ -221,7 +259,7 @@ const Dashboard = ({ user }) => {
       <div className="section-bar">
         <span className="section-eyebrow">Your Threads</span>
         <div style={{ display: 'flex', gap: '12px' }}>
-          <button className="btn btn-ghost" style={{ padding: '8px 12px', fontSize: '0.82rem' }} onClick={() => seedTestData(user.uid)}>
+          <button className="btn btn-ghost" style={{ padding: '8px 12px', fontSize: '0.82rem' }} onClick={() => setShowSeedModal(true)}>
             🧪 Seed Test Data
           </button>
           <button className="btn btn-amber" style={{ padding: '8px 16px', fontSize: '0.82rem' }} onClick={() => setShowModal(true)}>
@@ -284,6 +322,8 @@ const Dashboard = ({ user }) => {
           <div className="new-chain-plus">+</div>
           <span className="new-chain-label">Track a new relationship</span>
         </button>
+      </div>
+
       </div>
 
       {/* Create thread modal — now supports N variables */}
@@ -369,8 +409,36 @@ const Dashboard = ({ user }) => {
         </div>
       )}
       
+      {/* Seed Test Data Modal */}
+      {showSeedModal && (
+        <div className="glass-overlay" onClick={e => e.target === e.currentTarget && setShowSeedModal(false)}>
+          <div className="modal">
+            <div className="modal-header">
+              <span className="modal-title">Seed Test Data</span>
+              <button className="modal-close" onClick={() => setShowSeedModal(false)}>×</button>
+            </div>
+            <div style={{ padding: '0 0 20px', color: 'var(--text-2)' }}>
+              Are you sure you want to seed test data? This will create new threads with mock data. Test data will not affect your activity or streaks.
+            </div>
+            <div className="form-actions">
+              <button
+                className="btn btn-amber"
+                disabled={isSeeding}
+                style={{ flex: 1, borderRadius: '10px', padding: '12px' }}
+                onClick={handleSeedTestData}
+              >
+                {isSeeding ? 'Seeding…' : 'Yes, Seed Data'}
+              </button>
+              <button className="btn btn-ghost" style={{ borderRadius: '10px', padding: '12px 18px' }} onClick={() => setShowSeedModal(false)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <ToastPortal toasts={toasts} />
-    </div>
+    </>
   );
 };
 

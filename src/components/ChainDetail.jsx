@@ -62,6 +62,14 @@ const ChainDetail = ({ user }) => {
     localStorage.setItem('correlatio_nerdMode', JSON.stringify(val));
   };
   const [submitting, setSubmitting] = useState(false);
+  
+  // Edit name state
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editNameValue, setEditNameValue] = useState('');
+  
+  // Delete modal state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [activeTab, setActiveTab] = useState('scatter');
   const [note, setNote] = useState('');
   // Selected pair for scatter plot: [indexA, indexB]
@@ -84,6 +92,7 @@ const ChainDetail = ({ user }) => {
       if (chainSnap.exists()) {
         const normalized = normalizeThread({ id: chainSnap.id, ...chainSnap.data() });
         setChain(normalized);
+        setEditNameValue(normalized.name);
         setValues(Array.from({ length: normalized.variables.length }).fill(''));
       }
       const q = query(collection(db, `users/${user.uid}/chains/${chainId}/logs`), orderBy('createdAt', 'asc'));
@@ -98,11 +107,38 @@ const ChainDetail = ({ user }) => {
   };
 
   const handleDelete = async () => {
-    if (!window.confirm("Are you sure you want to delete this thread? This will delete all logged data and cannot be undone.")) return;
+    setIsDeleting(true);
     try {
       await deleteDoc(doc(db, `users/${user.uid}/chains/${chainId}`));
       navigate('/');
-    } catch (err) { console.error(err); }
+    } catch (err) { 
+      console.error(err);
+      setIsDeleting(false);
+      setShowDeleteModal(false);
+    }
+  };
+
+  const handleUpdateName = async () => {
+    if (!editNameValue.trim() || editNameValue === chain.name) {
+      setIsEditingName(false);
+      setEditNameValue(chain.name);
+      return;
+    }
+    try {
+      const docRef = doc(db, `users/${user.uid}/chains/${chainId}`);
+      // Wait, is there a specific way to update in Firestore? We can use setDoc with merge or updateDoc.
+      // updateDoc is imported? Let's check imports. Wait, I should import updateDoc if not.
+      // Since it's imported as `updateDoc`? No, let's use `setDoc` with `{ merge: true }`.
+      await import('firebase/firestore').then(({ setDoc }) => 
+        setDoc(docRef, { name: editNameValue.trim() }, { merge: true })
+      );
+      setChain(prev => ({ ...prev, name: editNameValue.trim() }));
+      setIsEditingName(false);
+      showToast('Name updated successfully!', 'success');
+    } catch (err) {
+      console.error(err);
+      showToast('Failed to update name.', 'error');
+    }
   };
 
   const handleAdd = async (e) => {
@@ -245,6 +281,7 @@ const ChainDetail = ({ user }) => {
   };
 
   return (
+    <>
     <div className="chain-page fade-up">
       <Link to="/" className="back-btn" data-html2canvas-ignore="true">← Back to threads</Link>
 
@@ -252,7 +289,33 @@ const ChainDetail = ({ user }) => {
       {/* Header */}
       <div className="chain-page-header">
         <div>
-          <h1 className="chain-page-title">{chain.name}</h1>
+          {isEditingName ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+              <input 
+                autoFocus
+                className="input" 
+                value={editNameValue} 
+                onChange={e => setEditNameValue(e.target.value)} 
+                onKeyDown={e => {
+                  if (e.key === 'Enter') handleUpdateName();
+                  if (e.key === 'Escape') {
+                    setIsEditingName(false);
+                    setEditNameValue(chain.name);
+                  }
+                }}
+                style={{ fontSize: '2rem', fontWeight: 'bold', padding: '4px 12px', height: 'auto', background: 'var(--bg)' }}
+              />
+              <button className="btn btn-amber" style={{ padding: '8px' }} onClick={handleUpdateName}>Save</button>
+              <button className="btn btn-ghost" style={{ padding: '8px' }} onClick={() => { setIsEditingName(false); setEditNameValue(chain.name); }}>Cancel</button>
+            </div>
+          ) : (
+            <h1 className="chain-page-title" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              {chain.name}
+              <button className="btn btn-ghost" style={{ padding: '4px', fontSize: '1.2rem', color: 'var(--text-3)' }} onClick={() => setIsEditingName(true)} title="Edit Name">
+                ✎
+              </button>
+            </h1>
+          )}
           <div className="chain-page-meta">
             {vars.map((v, vi) => (
               <React.Fragment key={vi}>
@@ -281,7 +344,7 @@ const ChainDetail = ({ user }) => {
             <div className="toggle-track"><div className="toggle-thumb" /></div>
             <span className="nerd-toggle-text">🤓 Nerd Mode</span>
           </label>
-          <button className="btn btn-ghost" style={{ padding: '6px 12px', fontSize: '0.75rem', borderColor: 'rgba(244,63,94,0.3)', color: 'var(--rose)' }} onClick={handleDelete}>
+          <button className="btn btn-ghost" style={{ padding: '6px 12px', fontSize: '0.75rem', borderColor: 'rgba(244,63,94,0.3)', color: 'var(--rose)' }} onClick={() => setShowDeleteModal(true)}>
             Delete Thread
           </button>
         </div>
@@ -606,201 +669,114 @@ const ChainDetail = ({ user }) => {
       </div>
       </div>
 
-      {/* Export Modal with Theme Picker and Format Chooser */}
-      {showExportModal && (
-        <div className="glass-overlay" onClick={e => e.target === e.currentTarget && setShowExportModal(false)} style={{ zIndex: 9999, overflow: 'auto', padding: '20px' }}>
-          <div className="modal" style={{ maxWidth: '940px', width: '100%', maxHeight: '90vh', display: 'flex', flexDirection: 'column', background: 'var(--bg-2)', border: '1px solid var(--border)', borderRadius: '24px', overflow: 'hidden' }}>
-            <div className="modal-header" style={{ flexShrink: 0, padding: '20px 24px', borderBottom: '1px solid var(--border)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontSize: '1.2rem' }}>📸</span>
-                <span className="modal-title" style={{ fontSize: '1.1rem', fontWeight: 700 }}>Export & Share</span>
-              </div>
-              <button className="modal-close" onClick={() => setShowExportModal(false)}>×</button>
+      {/* Modals are placed outside the fade-up container so fixed positioning works perfectly relative to the viewport */}
+      <ToastPortal toasts={toasts} />
+    </div>
+
+    {/* Export Modal with Theme Picker and Format Chooser */}
+    {showExportModal && (
+      <div className="glass-overlay" onClick={e => e.target === e.currentTarget && setShowExportModal(false)} style={{ zIndex: 9999, overflow: 'auto', padding: '20px' }}>
+        <div className="modal" style={{ maxWidth: '940px', width: '100%', maxHeight: '90vh', display: 'flex', flexDirection: 'column', background: 'var(--bg-2)', border: '1px solid var(--border)', borderRadius: '24px', overflow: 'hidden' }}>
+          <div className="modal-header" style={{ flexShrink: 0, padding: '20px 24px', borderBottom: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: '1.2rem' }}>📸</span>
+              <span className="modal-title" style={{ fontSize: '1.1rem', fontWeight: 700 }}>Export & Share</span>
             </div>
-            
-            <div style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              {/* Format Switcher: Card vs Executive Report */}
-              <div style={{
-                display: 'flex',
-                background: 'rgba(255,252,245,0.05)',
-                border: '1px solid var(--border)',
-                borderRadius: '12px',
-                padding: '4px',
-                marginBottom: '20px',
-                gap: '6px',
-              }}>
-                <button
-                  onClick={() => setExportType('card')}
-                  style={{
-                    padding: '8px 20px',
-                    borderRadius: '8px',
-                    border: 'none',
-                    background: exportType === 'card' ? 'var(--amber)' : 'transparent',
-                    color: exportType === 'card' ? '#09090b' : 'var(--text-2)',
-                    fontWeight: 700,
-                    fontSize: '0.85rem',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease',
-                  }}
-                >
-                  🎨 Social Card
-                </button>
-                <button
-                  onClick={() => setExportType('report')}
-                  style={{
-                    padding: '8px 20px',
-                    borderRadius: '8px',
-                    border: 'none',
-                    background: exportType === 'report' ? 'var(--amber)' : 'transparent',
-                    color: exportType === 'report' ? '#09090b' : 'var(--text-2)',
-                    fontWeight: 700,
-                    fontSize: '0.85rem',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease',
-                  }}
-                >
-                  📊 Executive Report (PDF)
-                </button>
-              </div>
-
-              {/* Theme Selector */}
-              <div style={{ display: 'flex', gap: '10px', marginBottom: '24px', flexWrap: 'wrap', justifyContent: 'center' }}>
-                {EXPORT_THEMES.map(t => (
-                  <button
-                    key={t.id}
-                    onClick={() => setExportTheme(t.id)}
-                    style={{
-                      padding: '7px 16px',
-                      borderRadius: '20px',
-                      border: exportTheme === t.id ? '2px solid white' : '1px solid var(--border)',
-                      background: t.bg,
-                      color: t.color,
-                      fontSize: '0.8rem',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      transition: 'all 0.2s ease',
-                      opacity: exportTheme === t.id ? 1 : 0.6,
-                      boxShadow: exportTheme === t.id ? '0 4px 12px rgba(0,0,0,0.4)' : 'none',
-                    }}
-                  >
-                    {t.name}
-                  </button>
-                ))}
-              </div>
-
-              {/* Hidden elements strictly for html2canvas capture without CSS transform scaling */}
-              <div style={{ position: 'absolute', top: '-20000px', left: '-20000px' }}>
-                <ExportCard 
-                  ref={exportRef}
-                  chain={chain}
-                  rValue={rValue}
-                  logsCount={logs.length}
-                  themeId={exportTheme}
-                  user={user}
-                />
-                <ExportReport
-                  ref={exportReportRef}
-                  chain={chain}
-                  rValue={rValue}
-                  logs={logs}
-                  themeId={exportTheme}
-                  user={user}
-                />
-              </div>
-
-              {/* Visual Preview Container */}
-              {exportType === 'card' ? (
-                <div style={{
-                  width: '800px',
-                  height: '450px',
-                  transform: 'scale(0.8)',
-                  transformOrigin: 'top center',
-                  marginBottom: '-70px',
-                  boxShadow: '0 24px 48px rgba(0,0,0,0.6)',
-                  borderRadius: '24px',
-                  overflow: 'hidden',
-                }}>
-                  <ExportCard 
-                    chain={chain}
-                    rValue={rValue}
-                    logsCount={logs.length}
-                    themeId={exportTheme}
-                    user={user}
-                  />
-                </div>
-              ) : (
-                <div style={{
-                  width: '100%',
-                  maxHeight: '460px',
-                  overflowY: 'auto',
-                  borderRadius: '16px',
-                  border: '1px solid rgba(255,252,245,0.1)',
-                  boxShadow: '0 20px 40px rgba(0,0,0,0.5)',
-                  background: '#09090b',
-                  display: 'flex',
-                  justifyContent: 'center',
-                  padding: '20px 0',
-                }}>
-                  <div style={{ transform: 'scale(0.72)', transformOrigin: 'top center', marginBottom: '-280px' }}>
-                    <ExportReport
-                      chain={chain}
-                      rValue={rValue}
-                      logs={logs}
-                      themeId={exportTheme}
-                      user={user}
-                      selectedPair={selectedPair}
-                      isAllThree={isAllThree}
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="modal-footer" style={{
-              flexShrink: 0,
-              padding: '18px 24px',
-              borderTop: '1px solid var(--border)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              background: 'rgba(255,252,245,0.02)',
+            <button className="modal-close" onClick={() => setShowExportModal(false)}>×</button>
+          </div>
+          
+          <div style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <div style={{
+              display: 'flex', background: 'rgba(255,252,245,0.05)', border: '1px solid var(--border)', borderRadius: '12px', padding: '4px', marginBottom: '20px', gap: '6px'
             }}>
-              <span style={{ fontSize: '0.78rem', color: 'var(--text-3)' }}>
-                {exportType === 'report' ? '📄 Executive PDF Report format' : '🎨 Visual Card format'}
-              </span>
+              <button
+                onClick={() => setExportType('card')}
+                style={{ padding: '8px 20px', borderRadius: '8px', border: 'none', background: exportType === 'card' ? 'var(--amber)' : 'transparent', color: exportType === 'card' ? '#09090b' : 'var(--text-2)', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', transition: 'all 0.2s ease' }}
+              >
+                🎨 Social Card
+              </button>
+              <button
+                onClick={() => setExportType('report')}
+                style={{ padding: '8px 20px', borderRadius: '8px', border: 'none', background: exportType === 'report' ? 'var(--amber)' : 'transparent', color: exportType === 'report' ? '#09090b' : 'var(--text-2)', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', transition: 'all 0.2s ease' }}
+              >
+                📊 Executive Report (PDF)
+              </button>
+            </div>
 
-              <div style={{ display: 'flex', gap: '12px' }}>
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '24px', flexWrap: 'wrap', justifyContent: 'center' }}>
+              {EXPORT_THEMES.map(t => (
                 <button
-                  className="btn btn-ghost"
-                  onClick={() => handleExport('png')}
-                  disabled={exporting}
-                  style={{ padding: '10px 20px', fontSize: '0.9rem', borderRadius: '10px' }}
+                  key={t.id} onClick={() => setExportTheme(t.id)}
+                  style={{ padding: '7px 16px', borderRadius: '20px', border: exportTheme === t.id ? '2px solid white' : '1px solid var(--border)', background: t.bg, color: t.color, fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s ease', opacity: exportTheme === t.id ? 1 : 0.6, boxShadow: exportTheme === t.id ? '0 4px 12px rgba(0,0,0,0.4)' : 'none' }}
                 >
-                  {exporting ? 'Exporting…' : '🖼️ Download PNG'}
+                  {t.name}
                 </button>
-                <button
-                  className="btn btn-amber"
-                  onClick={() => handleExport('pdf')}
-                  disabled={exporting}
-                  style={{
-                    padding: '10px 24px',
-                    fontSize: '0.95rem',
-                    fontWeight: 700,
-                    borderRadius: '10px',
-                    boxShadow: '0 4px 16px rgba(245,158,11,0.3)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                  }}
-                >
-                  {exporting ? 'Generating PDF…' : '📄 Download PDF'}
-                </button>
+              ))}
+            </div>
+
+            <div style={{ position: 'absolute', top: '-20000px', left: '-20000px' }}>
+              <ExportCard ref={exportRef} chain={chain} rValue={rValue} logsCount={logs.length} themeId={exportTheme} user={user} />
+              <ExportReport ref={exportReportRef} chain={chain} rValue={rValue} logs={logs} themeId={exportTheme} user={user} />
+            </div>
+
+            {exportType === 'card' ? (
+              <div style={{ width: '800px', height: '450px', transform: 'scale(0.8)', transformOrigin: 'top center', marginBottom: '-70px', boxShadow: '0 24px 48px rgba(0,0,0,0.6)', borderRadius: '24px', overflow: 'hidden' }}>
+                <ExportCard chain={chain} rValue={rValue} logsCount={logs.length} themeId={exportTheme} user={user} />
               </div>
+            ) : (
+              <div style={{ width: '100%', maxHeight: '460px', overflowY: 'auto', borderRadius: '16px', border: '1px solid rgba(255,252,245,0.1)', boxShadow: '0 20px 40px rgba(0,0,0,0.5)', background: '#09090b', display: 'flex', justifyContent: 'center', padding: '20px 0' }}>
+                <div style={{ transform: 'scale(0.72)', transformOrigin: 'top center', marginBottom: '-280px' }}>
+                  <ExportReport chain={chain} rValue={rValue} logs={logs} themeId={exportTheme} user={user} selectedPair={selectedPair} isAllThree={isAllThree} />
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="modal-footer" style={{ flexShrink: 0, padding: '18px 24px', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255,252,245,0.02)' }}>
+            <span style={{ fontSize: '0.78rem', color: 'var(--text-3)' }}>
+              {exportType === 'report' ? '📄 Executive PDF Report format' : '🎨 Visual Card format'}
+            </span>
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button className="btn btn-ghost" onClick={() => handleExport('png')} disabled={exporting} style={{ padding: '10px 20px', fontSize: '0.9rem', borderRadius: '10px' }}>
+                {exporting ? 'Exporting…' : '🖼️ Download PNG'}
+              </button>
+              <button className="btn btn-amber" onClick={() => handleExport('pdf')} disabled={exporting} style={{ padding: '10px 24px', fontSize: '0.95rem', fontWeight: 700, borderRadius: '10px', boxShadow: '0 4px 16px rgba(245,158,11,0.3)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {exporting ? 'Generating PDF…' : '📄 Download PDF'}
+              </button>
             </div>
           </div>
         </div>
-      )}
-    </div>
+      </div>
+    )}
+    
+    {/* Delete Thread Modal */}
+    {showDeleteModal && (
+      <div className="glass-overlay" onClick={e => e.target === e.currentTarget && setShowDeleteModal(false)}>
+        <div className="modal">
+          <div className="modal-header">
+            <span className="modal-title" style={{ color: 'var(--rose)' }}>Delete Thread?</span>
+            <button className="modal-close" onClick={() => setShowDeleteModal(false)}>×</button>
+          </div>
+          <div style={{ padding: '0 0 20px', color: 'var(--text-2)' }}>
+            Are you sure you want to delete this thread? This will delete all logged data and cannot be undone.
+          </div>
+          <div className="form-actions">
+            <button
+              className="btn btn-amber"
+              disabled={isDeleting}
+              style={{ flex: 1, borderRadius: '10px', padding: '12px', background: 'var(--rose)', color: '#fff' }}
+              onClick={handleDelete}
+            >
+              {isDeleting ? 'Deleting…' : 'Yes, Delete'}
+            </button>
+            <button className="btn btn-ghost" style={{ borderRadius: '10px', padding: '12px 18px' }} onClick={() => setShowDeleteModal(false)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 };
 

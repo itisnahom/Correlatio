@@ -35,7 +35,8 @@ export const seedTestData = async (uid) => {
       await addDoc(collection(db, `users/${uid}/chains/${t1Ref.id}/logs`), {
         dateString,
         createdAt: d,
-        values: [parseFloat(deepWork.toFixed(1)), cups, Math.round(sleepBase)]
+        values: [parseFloat(deepWork.toFixed(1)), cups, Math.round(sleepBase)],
+        isTestData: true
       });
     }
 
@@ -65,14 +66,14 @@ export const seedTestData = async (uid) => {
       await addDoc(collection(db, `users/${uid}/chains/${t2Ref.id}/logs`), {
         dateString,
         createdAt: d,
-        values: [ran, energy]
+        values: [ran, energy],
+        isTestData: true
       });
     }
 
-    alert('Successfully seeded both "Productivity" and "Exercise Impact" (Yes/No) data! Refreshing...');
-    window.location.reload();
+    return true;
   } catch (err) {
     console.error("Error seeding data:", err);
-    alert('Failed to seed data. Check console.');
+    throw err;
   }
 };

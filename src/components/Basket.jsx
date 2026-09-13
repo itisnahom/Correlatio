@@ -151,9 +151,9 @@ const Basket = ({ user }) => {
           matrix.push({ eggA, eggB, r });
         }
       }
-      return { type: 'found', count: validDates.length, matrix };
+      return { type: 'found', count: validDates.length, matrix, validDates, dateMap };
     } else {
-      return { type: 'suggest', count: validDates.length };
+      return { type: 'suggest', count: validDates.length, validDates, dateMap };
     }
   }, [basketEggs, allLogs]);
 
@@ -229,7 +229,7 @@ const Basket = ({ user }) => {
               </div>
               <button 
                 className="btn btn-amber" 
-                onClick={() => navigate('/', { state: { prefillVariables: basketEggs } })}
+                onClick={() => navigate('/', { state: { prefillVariables: basketEggs, prefillLogs: basketResult } })}
               >
                 Track these together →
               </button>
@@ -244,7 +244,7 @@ const Basket = ({ user }) => {
               </p>
               <button 
                 className="btn btn-amber" 
-                onClick={() => navigate('/', { state: { prefillVariables: basketEggs } })}
+                onClick={() => navigate('/', { state: { prefillVariables: basketEggs, prefillLogs: basketResult } })}
               >
                 + Track this Relationship
               </button>
